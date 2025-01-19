@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "NoWebP - Image Converter",
+  "version": "1.0",
+  "description": "Easily convert WebP images to standard formats like JPG and PNG",
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "storage",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "web_accessible_resources": [{
+    "resources": ["*.jpg", "node_modules/image-conversion/build/*"],
+    "matches": ["<all_urls>"]
+  }],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+} 
