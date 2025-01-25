@@ -98,6 +98,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return false; // No response needed for other messages
 });
 
+// Handle download interception
+chrome.downloads.onDeterminingFilename.addListener(async (downloadItem, suggest) => {
+  try {
+    // Check if auto-convert is enabled
+    const { autoConvert } = await chrome.storage.sync.get('autoConvert');
+    if (!autoConvert) {
+      suggest(); // Proceed with normal download if auto-convert is disabled
+      return;
+    }
+
+    // Check if this is a WebP image
+    const isWebP = downloadItem.url.toLowerCase().includes('.webp') || 
+                  downloadItem.mime === 'image/webp' ||
+                  downloadItem.url.toLowerCase().includes('format=webp');
+
+    if (!isWebP) {
+      suggest(); // Proceed with normal download if not a WebP image
+      return;
+    }
+
+    // Cancel the original download
+    suggest({ cancel: true });
+
+    // Get the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      console.error('No active tab found');
+      return;
+    }
+
+    // Inject conversion scripts if needed
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['node_modules/image-conversion/build/conversion.js', 'converter.js']
+    });
+
+    // Send message to convert the image
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'convert',
+      imageUrl: downloadItem.url
+    });
+
+  } catch (error) {
+    console.error('Auto-convert error:', error);
+    suggest(); // Proceed with normal download if there's an error
+  }
+});
+
 // Extract filename from URL
 function getFilenameFromUrl(url) {
   try {

@@ -6,9 +6,11 @@
   "permissions": [
     "activeTab",
     "downloads",
+    "downloads.onDeterminingFilename",
     "storage",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
