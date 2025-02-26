@@ -59,7 +59,19 @@ function handleWebPImage(img) {
             e.preventDefault();
             e.stopPropagation();
 
+            // Prevent multiple clicks while processing
+            if (img.dataset.processing === 'true') {
+                return;
+            }
+
             try {
+                img.dataset.processing = 'true';
+                // Add visual feedback
+                const indicator = img.parentElement.querySelector('.webp-convert-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Converting...';
+                }
+
                 // Send message to background script to convert image
                 const response = await chrome.runtime.sendMessage({
                     action: 'convertWebP',
@@ -68,9 +80,21 @@ function handleWebPImage(img) {
                 
                 if (!response?.success) {
                     console.error('Conversion failed:', response?.error);
+                    if (indicator) {
+                        indicator.textContent = 'Conversion failed';
+                        setTimeout(() => {
+                            indicator.textContent = 'Click to Convert';
+                        }, 2000);
+                    }
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
+            } finally {
+                img.dataset.processing = 'false';
+                const indicator = img.parentElement.querySelector('.webp-convert-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Click to Convert';
+                }
             }
         });
 
@@ -79,12 +103,15 @@ function handleWebPImage(img) {
     }
 
     // Auto-convert if enabled
-    if (autoConvertEnabled) {
+    if (autoConvertEnabled && !img.dataset.autoConverting) {
+        img.dataset.autoConverting = 'true';
         chrome.runtime.sendMessage({
             action: 'convertWebP',
             imageUrl: img.src
         }).catch(error => {
             console.error('Auto-conversion failed:', error);
+        }).finally(() => {
+            img.dataset.autoConverting = 'false';
         });
     }
 }
@@ -105,7 +132,8 @@ function addConversionIndicator(img) {
         cursor: pointer;
         z-index: 10000;
         opacity: 0;
-        transition: opacity 0.2s;
+        transition: opacity 0.2s, background 0.2s;
+        pointer-events: none;
     `;
     indicator.textContent = 'Click to Convert';
 

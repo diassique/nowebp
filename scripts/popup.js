@@ -1,8 +1,20 @@
 document.addEventListener('DOMContentLoaded', async function() {
     const toggleButton = document.getElementById('toggleButton');
     const toggleCircle = toggleButton.querySelector('div');
+    const formatSelector = document.querySelector('.format-selector');
+    const formatSelect = document.getElementById('formatSelect');
     const recentList = document.getElementById('recentList');
     let isEnabled = false;
+
+    // Connect to background script
+    const port = chrome.runtime.connect({ name: 'popup' });
+
+    // Listen for messages from background script
+    port.onMessage.addListener((message) => {
+        if (message.action === 'updateRecentConversions') {
+            updateRecentConversionsList(message.recentConversions);
+        }
+    });
 
     // Wait for chrome APIs to be ready
     if (!chrome.storage) {
@@ -11,10 +23,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     try {
-        // Initialize toggle state from storage
-        const result = await chrome.storage.sync.get(['autoConvert']);
+        // Initialize toggle state and format preference from storage
+        const result = await chrome.storage.sync.get(['autoConvert', 'preferredFormat']);
         isEnabled = result.autoConvert || false;
+        const savedFormat = result.preferredFormat || 'jpg';
+        
         updateToggleState();
+        formatSelect.value = savedFormat;
+        formatSelector.style.display = isEnabled ? 'flex' : 'none';
 
         // Initialize recent conversions
         loadRecentConversions();
@@ -22,13 +38,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         toggleButton.addEventListener('click', function() {
             isEnabled = !isEnabled;
             updateToggleState();
+            formatSelector.style.display = isEnabled ? 'flex' : 'none';
             
-            // Update storage and notify background script
-            chrome.storage.sync.set({ autoConvert: isEnabled });
-            chrome.runtime.sendMessage({
-                action: 'updateAutoConvert',
-                enabled: isEnabled
+            // Update storage
+            chrome.storage.sync.set({ 
+                autoConvert: isEnabled,
+                preferredFormat: formatSelect.value
             });
+        });
+
+        // Handle format selection changes
+        formatSelect.addEventListener('change', function() {
+            chrome.storage.sync.set({ preferredFormat: formatSelect.value });
         });
     } catch (error) {
         console.error('Error initializing storage:', error);
@@ -52,13 +73,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Add smooth transition to toggle circle
     toggleCircle.style.transition = 'transform 0.3s ease-in-out';
-
-    // Listen for recent conversion updates
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === 'updateRecentConversions') {
-            updateRecentConversionsList(request.recentConversions);
-        }
-    });
 
     function loadRecentConversions() {
         chrome.storage.local.get(['recentConversions'], function(result) {

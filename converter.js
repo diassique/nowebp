@@ -19,8 +19,17 @@ function showStatus(message, isError = false) {
   return status;
 }
 
+// Track conversions in progress
+const conversionsInProgress = new Set();
+
 // Convert image function
-async function convertImage(imageUrl) {
+async function convertImage(imageUrl, filename, format = 'jpg') {
+  // Prevent multiple conversions of the same image
+  if (conversionsInProgress.has(imageUrl)) {
+    return;
+  }
+  
+  conversionsInProgress.add(imageUrl);
   const status = showStatus('Converting...');
 
   try {
@@ -31,17 +40,28 @@ async function convertImage(imageUrl) {
     // Convert using image-conversion library
     const convertedBlob = await imageConversion.compress(blob, {
       quality: 0.9,
-      type: 'image/jpeg'
+      type: format === 'jpg' ? 'image/jpeg' : 'image/png'
     });
 
+    // Create a new blob with explicit type
+    const newBlob = new Blob([convertedBlob], { 
+      type: format === 'jpg' ? 'image/jpeg' : 'image/png' 
+    });
+    
     // Create blob URL for download
-    const blobUrl = URL.createObjectURL(convertedBlob);
+    const blobUrl = URL.createObjectURL(newBlob);
 
-    // Send to background script
+    // Ensure filename has correct extension
+    const finalFilename = filename ? filename : `converted.${format}`;
+    const properFilename = finalFilename.toLowerCase().endsWith(`.${format}`) ? 
+      finalFilename : finalFilename.replace(/\.[^/.]+$/, '') + `.${format}`;
+
+    // Send to background script with filename
     chrome.runtime.sendMessage({
       action: 'downloadConverted',
       convertedImage: blobUrl,
-      originalUrl: imageUrl
+      originalUrl: imageUrl,
+      filename: properFilename
     });
 
     // Update status
@@ -57,13 +77,24 @@ async function convertImage(imageUrl) {
     status.textContent = 'Conversion failed. Please try again.';
     status.style.background = 'rgba(239, 68, 68, 0.9)';
     setTimeout(() => status.remove(), 3000);
+  } finally {
+    // Clean up tracking
+    setTimeout(() => {
+      conversionsInProgress.delete(imageUrl);
+    }, 1000); // Small delay to prevent immediate retries
   }
 }
 
 // Listen for conversion requests
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'convert') {
-    convertImage(request.imageUrl)
+    // Prevent duplicate conversion requests
+    if (conversionsInProgress.has(request.imageUrl)) {
+      sendResponse({ success: false, error: 'Conversion already in progress' });
+      return false;
+    }
+    
+    convertImage(request.imageUrl, request.filename, request.format)
       .then(() => sendResponse({ success: true }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Will respond asynchronously

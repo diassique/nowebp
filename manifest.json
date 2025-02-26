@@ -6,7 +6,6 @@
   "permissions": [
     "activeTab",
     "downloads",
-    "downloads.onDeterminingFilename",
     "storage",
     "contextMenus",
     "scripting",
@@ -16,7 +15,8 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_popup": "index.html",
@@ -32,7 +32,10 @@
     "128": "images/icon128.png"
   },
   "web_accessible_resources": [{
-    "resources": ["*.jpg", "node_modules/image-conversion/build/*"],
+    "resources": [
+      "node_modules/image-conversion/build/conversion.js",
+      "*.jpg"
+    ],
     "matches": ["<all_urls>"]
   }],
   "content_security_policy": {
