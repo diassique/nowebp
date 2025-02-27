@@ -16,44 +16,53 @@ function createContextMenuItems() {
       title: 'Convert to PNG',
       contexts: ['image']
     });
+    chrome.contextMenus.create({
+      id: 'separator',
+      type: 'separator',
+      contexts: ['image']
+    });
+    chrome.contextMenus.create({
+      id: 'batchConvert',
+      title: '🔥 Convert All WebP Images (PRO)',
+      contexts: ['image']
+    });
   });
 }
 
-// Track downloads to prevent duplicates and manage state
-const downloadStates = new Map();
+// Track conversions in progress
+const conversionInProgress = new Set();
 
-// Track connected ports
-const connectedPorts = new Set();
-
-// Handle port connections
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'popup') {
-    connectedPorts.add(port);
-    port.onDisconnect.addListener(() => {
-      connectedPorts.delete(port);
+// Show conversion status in content script
+async function showConversionStatus(tabId, status, isError = false, isPro = false) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (status, isError, isPro) => {
+        const div = document.createElement('div');
+        div.style.cssText = `
+          position: fixed;
+          top: 16px;
+          right: 16px;
+          background: ${isError ? 'rgba(239, 68, 68, 0.9)' : isPro ? 'rgba(79, 70, 229, 0.9)' : 'rgba(34, 197, 94, 0.9)'};
+          color: white;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-size: 14px;
+          z-index: 2147483647;
+          transition: opacity 0.3s;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        `;
+        div.textContent = status;
+        document.body.appendChild(div);
+        setTimeout(() => {
+          div.style.opacity = '0';
+          setTimeout(() => div.remove(), 300);
+        }, 2000);
+      },
+      args: [status, isError, isPro]
     });
-  }
-});
-
-// Clean up download states periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, state] of downloadStates.entries()) {
-    if (now - state.timestamp > 300000) { // 5 minutes timeout
-      downloadStates.delete(key);
-    }
-  }
-}, 60000); // Check every minute
-
-// Safe message sending function
-function safeNotifyPopup(message) {
-  for (const port of connectedPorts) {
-    try {
-      port.postMessage(message);
-    } catch (error) {
-      console.warn('Failed to send message to popup:', error);
-      connectedPorts.delete(port);
-    }
+  } catch (error) {
+    console.warn('Failed to show conversion status:', error);
   }
 }
 
@@ -61,13 +70,62 @@ function safeNotifyPopup(message) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'convertWebP' || info.menuItemId === 'convertPNG') {
     const format = info.menuItemId === 'convertWebP' ? 'jpg' : 'png';
-    await handleManualConversion(info.srcUrl, format);
+    await handleConversion(info.srcUrl, format, tab.id);
+  } else if (info.menuItemId === 'batchConvert') {
+    await handleBatchConversion(tab.id);
   }
 });
 
-// Handle manual conversion
-async function handleManualConversion(url, format) {
+// Handle batch conversion
+async function handleBatchConversion(tabId) {
   try {
+    // Show PRO feature message
+    await showConversionStatus(tabId, '✨ Upgrade to PRO to unlock batch conversion!', false, true);
+    
+    // Execute content script to find all WebP images
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const images = Array.from(document.querySelectorAll('img'));
+        return images
+          .filter(img => {
+            const src = img.src.toLowerCase();
+            return src.includes('.webp') || src.includes('format=webp');
+          })
+          .map(img => ({
+            url: img.src,
+            alt: img.alt || 'image'
+          }));
+      }
+    });
+
+    const webpImages = results[0].result;
+    if (webpImages.length === 0) {
+      await showConversionStatus(tabId, 'No WebP images found on this page', true);
+      return;
+    }
+
+    // Show how many images were found
+    await showConversionStatus(tabId, `Found ${webpImages.length} WebP images! Upgrade to convert all at once.`, false, true);
+  } catch (error) {
+    console.error('Batch conversion failed:', error);
+    await showConversionStatus(tabId, 'Failed to scan for WebP images', true);
+  }
+}
+
+// Handle single conversion
+async function handleConversion(url, format, tabId) {
+  // Prevent duplicate conversions
+  if (conversionInProgress.has(url)) {
+    return;
+  }
+
+  try {
+    conversionInProgress.add(url);
+    
+    // Show converting status
+    await showConversionStatus(tabId, 'Converting...');
+
     // Fetch and convert the image
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch image');
@@ -79,8 +137,13 @@ async function handleManualConversion(url, format) {
     const convertedBlob = await convertImage(blob, format);
     if (!convertedBlob) throw new Error('Conversion failed');
 
-    // Generate safe filename
-    const filename = generateSafeFilename(url, format);
+    // Generate filename
+    let filename = decodeURIComponent(url.split('/').pop() || '');
+    filename = filename.replace(/\.webp$/i, '').replace(/[^\w\s\-\.]/g, '_');
+    if (!filename || filename.trim().length === 0) {
+      filename = `image_${Date.now()}`;
+    }
+    filename = `${filename}.${format}`;
 
     // Create data URL for download
     const dataUrl = await blobToDataURL(convertedBlob);
@@ -93,124 +156,21 @@ async function handleManualConversion(url, format) {
     }, (downloadId) => {
       if (!downloadId) {
         console.error('Download failed:', chrome.runtime.lastError);
+        showConversionStatus(tabId, 'Conversion failed', true);
         return;
       }
-      // Add to recent conversions
-      addToRecentConversions(url, filename).catch(console.error);
+      // Show success message
+      showConversionStatus(tabId, 'Conversion successful!');
     });
   } catch (error) {
-    console.error('Manual conversion failed:', error);
+    console.error('Conversion failed:', error);
+    showConversionStatus(tabId, 'Conversion failed', true);
+  } finally {
+    conversionInProgress.delete(url);
   }
 }
-
-// Handle download interception
-chrome.downloads.onDeterminingFilename.addListener((downloadItem, suggest) => {
-  // Check if this is a WebP image
-  const isWebP = isWebPImage(downloadItem);
-  if (!isWebP) {
-    suggest();
-    return;
-  }
-
-  // Get auto-convert settings
-  chrome.storage.sync.get(['autoConvert', 'preferredFormat'], async (result) => {
-    const autoConvert = result.autoConvert || false;
-    const format = result.preferredFormat || 'jpg';
-
-    if (!autoConvert) {
-      suggest();
-      return;
-    }
-
-    // Prevent duplicate processing
-    const downloadKey = getDownloadKey(downloadItem);
-    if (downloadStates.has(downloadKey)) {
-      suggest();
-      return;
-    }
-
-    try {
-      // Mark download as in progress
-      downloadStates.set(downloadKey, {
-        timestamp: Date.now(),
-        status: 'processing'
-      });
-
-      // Generate filename first
-      const filename = generateSafeFilename(downloadItem.url, format);
-      if (!filename) {
-        throw new Error('Invalid filename');
-      }
-
-      // Cancel original download
-      suggest({ cancel: true });
-
-      // Fetch and convert the image
-      const response = await fetch(downloadItem.url);
-      if (!response.ok) throw new Error('Failed to fetch image');
-      
-      const blob = await response.blob();
-      if (!blob) throw new Error('Failed to get image blob');
-
-      // Convert the image
-      const convertedBlob = await convertImage(blob, format);
-      if (!convertedBlob) throw new Error('Conversion failed');
-
-      // Create data URL for download
-      const dataUrl = await blobToDataURL(convertedBlob);
-
-      // Start new download
-      chrome.downloads.download({
-        url: dataUrl,
-        filename: filename,
-        saveAs: true
-      }, (downloadId) => {
-        if (!downloadId) {
-          console.error('Download failed:', chrome.runtime.lastError);
-          cleanupDownload(downloadKey);
-          return;
-        }
-
-        // Track the new download
-        downloadStates.set(downloadKey, {
-          timestamp: Date.now(),
-          status: 'downloading',
-          downloadId: downloadId,
-          originalUrl: downloadItem.url,
-          newFilename: filename
-        });
-
-        // Add to recent conversions
-        addToRecentConversions(downloadItem.url, filename).catch(console.error);
-      });
-
-    } catch (error) {
-      console.error('Auto-conversion failed:', error);
-      cleanupDownload(downloadKey);
-      suggest(); // Fallback to original download
-    }
-  });
-
-  return true;
-});
 
 // Helper functions
-function isWebPImage(downloadItem) {
-  const url = downloadItem.url.toLowerCase();
-  const mime = downloadItem.mime?.toLowerCase() || '';
-  return url.includes('.webp') || 
-         mime.includes('image/webp') || 
-         url.includes('format=webp');
-}
-
-function getDownloadKey(downloadItem) {
-  return `${downloadItem.url}_${downloadItem.id}`;
-}
-
-function cleanupDownload(downloadKey) {
-  downloadStates.delete(downloadKey);
-}
-
 async function convertImage(blob, format) {
   try {
     // Create canvas and load image
@@ -230,30 +190,6 @@ async function convertImage(blob, format) {
   }
 }
 
-function generateSafeFilename(url, format) {
-  try {
-    const urlObj = new URL(url);
-    let filename = urlObj.pathname.split('/').pop() || 'image';
-    
-    // Remove query parameters and extension
-    filename = filename.split('?')[0].replace(/\.[^/.]+$/, '');
-    
-    // Clean up filename
-    filename = filename.replace(/[^a-zA-Z0-9-_]/g, '_')
-                      .replace(/_+/g, '_')
-                      .substring(0, 200);
-    
-    // Ensure we have a valid filename
-    if (!filename || filename.trim().length === 0) {
-      filename = `image_${Date.now()}`;
-    }
-    
-    return `${filename}.${format}`;
-  } catch (error) {
-    return `image_${Date.now()}.${format}`;
-  }
-}
-
 function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -261,56 +197,4 @@ function blobToDataURL(blob) {
     reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
     reader.readAsDataURL(blob);
   });
-}
-
-// Handle download state cleanup
-chrome.downloads.onChanged.addListener((delta) => {
-  if (!delta.state || delta.state.current !== 'complete') return;
-  
-  for (const [key, state] of downloadStates.entries()) {
-    if (state.downloadId === delta.id) {
-      cleanupDownload(key);
-      break;
-    }
-  }
-});
-
-// Listen for settings changes
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.autoConvert) {
-    const isEnabled = changes.autoConvert.newValue;
-    if (isEnabled) {
-      chrome.contextMenus.removeAll();
-    } else {
-      createContextMenuItems();
-    }
-  }
-});
-
-// Store recent conversions
-async function addToRecentConversions(originalUrl, convertedFilename) {
-  try {
-    const { recentConversions = [] } = await chrome.storage.local.get('recentConversions');
-    
-    recentConversions.unshift({
-      originalUrl,
-      convertedFilename,
-      timestamp: Date.now()
-    });
-
-    // Keep only last 10 conversions
-    while (recentConversions.length > 10) {
-      recentConversions.pop();
-    }
-
-    await chrome.storage.local.set({ recentConversions });
-    
-    // Notify popup using the safe message sending function
-    safeNotifyPopup({
-      action: 'updateRecentConversions',
-      recentConversions
-    });
-  } catch (error) {
-    console.error('Error storing conversion:', error);
-  }
 } 

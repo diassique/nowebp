@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Chrome Extension</title>
+    <title>NoWebP</title>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="styles/popup.css">
 </head>
-<body class="w-[350px] min-h-[400px] p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
+<body class="w-[350px] min-h-[300px] p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
     <div class="flex flex-col items-center space-y-6">
         <div class="text-center">
             <h1 class="text-2xl font-bold text-indigo-600 mb-2">NoWebP</h1>
@@ -13,43 +13,33 @@
         </div>
 
         <div class="w-full p-4 bg-white rounded-xl shadow-lg">
-            <div class="flex flex-col space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-gray-700">Auto-Convert on Download</span>
-                    <button class="w-12 h-6 rounded-full bg-indigo-100 flex items-center p-1 cursor-pointer" id="toggleButton">
-                        <div class="w-4 h-4 rounded-full bg-indigo-600"></div>
-                    </button>
+            <div class="flex items-center space-x-2 p-3 bg-indigo-50 rounded-lg">
+                <div class="flex-shrink-0">
+                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
-
-                <div class="flex items-center justify-between format-selector" style="display: none;">
-                    <span class="text-sm font-medium text-gray-700">Convert to Format</span>
-                    <select id="formatSelect" class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="jpg">JPG</option>
-                        <option value="png">PNG</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-center space-x-2 p-3 bg-indigo-50 rounded-lg">
-                    <div class="flex-shrink-0">
-                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div class="space-y-1">
-                        <p class="text-xs text-indigo-700 font-medium">Two ways to convert:</p>
-                        <p class="text-xs text-indigo-700">1. Click any WebP image to convert instantly</p>
-                        <p class="text-xs text-indigo-700">2. Toggle auto-convert to handle downloads</p>
-                    </div>
+                <div class="space-y-2">
+                    <p class="text-sm text-indigo-700 font-medium">How to use:</p>
+                    <p class="text-sm text-indigo-700">Right-click on any WebP image and select:</p>
+                    <p class="text-sm text-indigo-700">• "Convert to JPG" or</p>
+                    <p class="text-sm text-indigo-700">• "Convert to PNG"</p>
                 </div>
             </div>
         </div>
 
         <div class="w-full p-4 bg-white rounded-xl shadow-lg">
-            <h2 class="text-sm font-semibold text-gray-700 mb-3">Recent Conversions</h2>
-            <div class="max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-transparent hover:scrollbar-thumb-indigo-300 pr-2 space-y-2" id="recentList">
-                <!-- Recent conversions will be added here -->
-                <div class="text-xs text-gray-500 text-center py-3">
-                    No recent conversions
+            <div class="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-white">
+                <div class="flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <div class="space-y-2">
+                    <p class="text-sm font-medium">✨ PRO Features:</p>
+                    <p class="text-sm">• Batch convert all WebP images on a page</p>
+                    <p class="text-sm">• Custom output quality settings</p>
+                    <p class="text-sm">• Automatic file renaming</p>
                 </div>
             </div>
         </div>
@@ -58,6 +48,5 @@
             <p class="text-xs text-gray-500">Made with ❤️</p>
         </div>
     </div>
-    <script src="scripts/popup.js"></script>
 </body>
 </html>

@@ -1,15 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "NoWebP - Image Converter",
+  "name": "NoWebP",
   "version": "1.0",
-  "description": "Easily convert WebP images to standard formats like JPG and PNG",
+  "description": "Convert WebP images to JPG or PNG with a simple right-click",
   "permissions": [
-    "activeTab",
-    "downloads",
-    "storage",
     "contextMenus",
-    "scripting",
-    "tabs"
+    "downloads",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
